@@ -11,6 +11,8 @@ import shutil
 import json
 from argparse import ArgumentParser
 import sys
+import time
+
 
 def print_status(index, status):
     if index > 0 and index % 30 == 0:
@@ -29,6 +31,33 @@ def get_drive_service(email):
     drive_service = build('drive', 'v3', credentials=delegated_credentials)
     return drive_service
 
+def get_files(drive_service, email, page_token):
+    global counter
+    try:
+        return drive_service.files().list(q="'"+email+"' in owners",
+                                            spaces='drive',
+                                            fields='nextPageToken, files(id, name)',
+                                            pageToken=page_token).execute()
+    except:
+        counter+=1
+        time.sleep(1)
+        if counter > 10:
+            print('API error on fetching files for %s' % email)
+            return
+        return get_files(drive_service, email, page_token)
+
+def get_permissions(drive_service, file_id):
+    global counter
+    try:
+        return drive_service.permissions().list(fileId=file_id).execute()
+    except:
+        counter+=1
+        time.sleep(1)
+        if counter > 10:
+            print('API error on getting permissions for file %s' % file_id)
+            return
+        return get_permissions(drive_service, file_id)
+
 
 def delete_permission(drive_service, file_id, p_id):
     global counter
@@ -36,6 +65,7 @@ def delete_permission(drive_service, file_id, p_id):
         drive_service.permissions().delete(fileId=file_id, permissionId=p_id).execute()
     except:
         counter+=1
+        time.sleep(1)
         if counter > 10:
             print('API error on deleting permission for file %s' % file_id)
             return
@@ -62,13 +92,10 @@ def main():
     index = 1
 
     while True:
-        response = drive_service.files().list(q="'"+EMAIL+"' in owners",
-                                            spaces='drive',
-                                            fields='nextPageToken, files(id, name)',
-                                            pageToken=page_token).execute()
+        response = get_files(drive_service, EMAIL, page_token)
         for file in response.get('files', []):
             status='.'
-            res = drive_service.permissions().list(fileId=file.get('id')).execute()
+            res = get_permissions(drive_service, file.get('id'))
             permissions = res['permissions']
 
             for p in permissions:
