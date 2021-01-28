@@ -29,6 +29,17 @@ def get_drive_service(email):
     drive_service = build('drive', 'v3', credentials=delegated_credentials)
     return drive_service
 
+
+def delete_permission(drive_service, file_id, p_id):
+    global counter
+    try:
+        drive_service.permissions().delete(fileId=file_id, permissionId=p_id).execute()
+    except:
+        delete_permission(drive_service, file_id, p_id)
+        counter+=1
+        if counter > 10:
+            raise Exception('API error on deleting permission')
+
 def main():
     print('')
     parser = ArgumentParser(description='Removes the domain permission of all files and folders in Google Drive of a domain user')
@@ -61,8 +72,8 @@ def main():
 
             for p in permissions:
                 if p['type'] == "domain":
+                    delete_permission(drive_service, file.get('id'), p['id'])
                     deleted_permissions.append(file)
-                    drive_service.permissions().delete(fileId=file.get('id'), permissionId=p['id']).execute()
                     status='d'
             print_status(index, status)
             index += 1
