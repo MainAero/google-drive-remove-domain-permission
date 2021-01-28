@@ -37,7 +37,8 @@ def delete_permission(drive_service, file_id, p_id):
     except:
         counter+=1
         if counter > 10:
-            raise Exception('API error on deleting permission')
+            print('API error on deleting permission for file %s' % file_id)
+            return
         delete_permission(drive_service, file_id, p_id)
 
 def main():
