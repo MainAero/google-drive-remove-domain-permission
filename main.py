@@ -31,12 +31,22 @@ def get_drive_service(email):
     drive_service = build('drive', 'v3', credentials=delegated_credentials)
     return drive_service
 
-def get_files(drive_service, email, page_token):
-    global counter
+def get_files(drive_service, email, page_token, drive_id=None, counter=0):
     try:
-        return drive_service.files().list(q="'"+email+"' in owners",
+        query=None
+        corpora=None
+        if email and drive_id == None:
+            query = "'"+email+"' in owners"
+        if drive_id:
+            corpora = 'drive'
+
+        return drive_service.files().list(q=query,
+                                            driveId=drive_id,
+                                            corpora=corpora,
                                             spaces='drive',
                                             fields='nextPageToken, files(id, name)',
+                                            includeItemsFromAllDrives=True,
+                                            supportsAllDrives=True,
                                             pageToken=page_token).execute()
     except:
         counter+=1
@@ -44,38 +54,38 @@ def get_files(drive_service, email, page_token):
         if counter > 10:
             print('API error on fetching files for %s' % email)
             return
-        return get_files(drive_service, email, page_token)
+        return get_files(drive_service, email, page_token, counter)
 
-def get_permissions(drive_service, file_id):
-    global counter
+def get_permissions(drive_service, file_id, counter=0):
     try:
-        return drive_service.permissions().list(fileId=file_id).execute()
+        return drive_service.permissions().list(fileId=file_id,supportsAllDrives=True).execute()
     except:
         counter+=1
         time.sleep(1)
         if counter > 10:
             print('API error on getting permissions for file %s' % file_id)
             return
-        return get_permissions(drive_service, file_id)
+        return get_permissions(drive_service, file_id, counter)
 
 
-def delete_permission(drive_service, file_id, p_id):
-    global counter
+def delete_permission(drive_service, file_id, p_id, counter=0):
     try:
-        drive_service.permissions().delete(fileId=file_id, permissionId=p_id).execute()
+        drive_service.permissions().delete(fileId=file_id, permissionId=p_id, supportsAllDrives=True).execute()
     except:
         counter+=1
         time.sleep(1)
         if counter > 10:
             print('API error on deleting permission for file %s' % file_id)
             return
-        delete_permission(drive_service, file_id, p_id)
+        delete_permission(drive_service, file_id, p_id, counter)
 
 def main():
     print('')
     parser = ArgumentParser(description='Removes the domain permission of all files and folders in Google Drive of a domain user')
     parser.add_argument('-e', '--email', dest='email', required=True,
                     help='email of the user')
+    parser.add_argument('-d', '--driveId', dest='drive_id', required=False,
+                    help='drive id if you want to apply it on a shared drive')
 
     if len(sys.argv)==1:
         parser.print_help()
@@ -83,6 +93,7 @@ def main():
 
     args = parser.parse_args()  
     EMAIL = args.email
+    DRIVE_ID = args.drive_id
 
     print('Recursive checking all files / folders of %s ...' % (EMAIL))
 
@@ -92,7 +103,7 @@ def main():
     index = 1
 
     while True:
-        response = get_files(drive_service, EMAIL, page_token)
+        response = get_files(drive_service, EMAIL, page_token, DRIVE_ID)
         for file in response.get('files', []):
             status='.'
             res = get_permissions(drive_service, file.get('id'))
